@@ -22,19 +22,28 @@ Any agent  →  simple_proxy.py (port 4000)  →  OVMS Docker (port 8000)  →  
 ## Quick start
 
 ```bash
-# First time only
-bash setup.sh --proxy http://your-proxy:911   # omit --proxy if not behind one
+# ── First time only ──────────────────────────────────────────────────────────
+git clone https://github.com/bharath1r/containerized-agent-ovms.git
+cd containerized-agent-ovms
 
-# Every session
-bash ~/start.sh
+bash setup.sh                                  # no proxy
+bash setup.sh --proxy http://your-proxy:911    # behind a corporate proxy
 
-# Launch your agent
-bash ~/launch-agent.sh --agent claude          # Claude Code
-bash ~/launch-agent.sh --agent aider           # Aider
-bash ~/launch-agent.sh --agent aider --args "--no-auto-commits"
+# ── Every session ────────────────────────────────────────────────────────────
+bash ~/start.sh           # auto-detects Intel GPU, falls back to CPU
+bash ~/start.sh --gpu     # force GPU (Intel Arc / Iris Xe)
+bash ~/start.sh --cpu     # force CPU
+
+# ── Launch your agent ────────────────────────────────────────────────────────
+bash ~/launch-agent.sh --agent claude                             # Claude Code
+bash ~/launch-agent.sh --agent aider                              # Aider
+bash ~/launch-agent.sh --agent aider --args "--no-auto-commits"   # Aider options
 
 # Any OpenAI-compatible tool
 bash ~/launch-agent.sh --agent custom --cmd "mytool --api-base http://localhost:4000/v1 --model Phi-3.5-mini"
+
+# ── Stop services ────────────────────────────────────────────────────────────
+bash ~/stop.sh
 ```
 
 ## Connection details (for manual config)
@@ -48,6 +57,11 @@ bash ~/launch-agent.sh --agent custom --cmd "mytool --api-base http://localhost:
 
 ## Hardware targets
 
-- Intel Core Ultra / Arc GPU (xe driver) — GPU inference (auto-detected)
-- Any x86 CPU — automatic fallback
+| Flag | Behaviour |
+|------|-----------|
+| *(none)* | Auto-detects Intel GPU via `/dev/dri/renderD128` + vendor ID `8086:*`, falls back to CPU |
+| `--gpu` | Force GPU — requires Intel xe/i915 driver and `/dev/dri/renderD128` |
+| `--cpu` | Force CPU — works on any x86 machine |
+
+GPU is passed into the Docker container via `--device /dev/dri --group-add <render_gid>` only when GPU mode is active.
 
