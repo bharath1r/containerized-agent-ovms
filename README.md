@@ -26,7 +26,7 @@ Any agent  →  simple_proxy.py (port 4000)  →  OVMS Docker (port 8000)  →  
 bash setup.sh --proxy http://your-proxy:911   # omit --proxy if not behind one
 
 # Every session
-bash ~/start-services.sh
+bash ~/start.sh
 
 # Launch your agent
 bash ~/launch-agent.sh --agent claude          # Claude Code

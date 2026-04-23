@@ -50,11 +50,11 @@ check_services() {
     ovms_ok=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${OVMS_PORT}/v3/chat/completions 2>/dev/null || echo "000")
 
     if [[ "$proxy_ok" != "200" ]]; then
-        echo "ERROR: Proxy not running on port ${PROXY_PORT}. Run: bash ~/start-claude.sh"
+        echo "ERROR: Proxy not running on port ${PROXY_PORT}. Run: bash ~/start.sh"
         exit 1
     fi
     if [[ "$ovms_ok" != "200" && "$ovms_ok" != "400" ]]; then
-        echo "ERROR: OVMS not running on port ${OVMS_PORT}. Run: bash ~/start-claude.sh"
+        echo "ERROR: OVMS not running on port ${OVMS_PORT}. Run: bash ~/start.sh"
         exit 1
     fi
     echo "Services OK  [OVMS: ${ovms_ok}  Proxy: ${proxy_ok}]"

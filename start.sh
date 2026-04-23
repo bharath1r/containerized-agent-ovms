@@ -5,7 +5,7 @@
 # Auto-detects Intel GPU (Arc/Iris Xe) and uses it if available, falls back to CPU.
 # Run this every time you want to use Claude Code with the local model.
 #
-# Usage:  bash ~/start-claude.sh [--cpu | --gpu]
+# Usage:  bash ~/start.sh [--cpu | --gpu]
 # =============================================================================
 
 set -euo pipefail
