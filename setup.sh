@@ -78,8 +78,16 @@ else
     sudo apt-get update
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
         docker-buildx-plugin docker-compose-plugin
-    sudo usermod -aG docker "$USER"
     echo "Docker installed: $(docker --version)"
+fi
+
+# Always ensure the current user is in the docker group
+sudo usermod -aG docker "$USER" 2>/dev/null || true
+# Use sudo docker if the group hasn't taken effect in this session yet
+if docker info &>/dev/null 2>&1; then
+    DOCKER_CMD="docker"
+else
+    DOCKER_CMD="sudo docker"
 fi
 
 # Configure Docker proxy if set
@@ -192,7 +200,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 if [[ "$SKIP_DOCKER_PULL" == "true" ]]; then
     echo "Skipping Docker pull (--skip-docker-pull)"
 else
-    docker pull openvino/model_server:latest-gpu
+    $DOCKER_CMD pull openvino/model_server:latest-gpu
     echo "OVMS image ready."
 fi
 
