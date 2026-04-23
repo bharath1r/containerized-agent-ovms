@@ -83,10 +83,11 @@ launch_aider() {
         echo "Aider not found. Installing..."
         "${VENV_DIR}/bin/pip" install aider-chat
     fi
+    # litellm (used by aider) requires "openai/" prefix for custom OpenAI-compatible endpoints
     exec "${VENV_DIR}/bin/aider" \
         --openai-api-base "${OPENAI_BASE}" \
         --openai-api-key  "local-ovms" \
-        --model           "${OVMS_MODEL}" \
+        --model           "openai/${OVMS_MODEL}" \
         --no-check-update \
         ${EXTRA_ARGS}
 }
