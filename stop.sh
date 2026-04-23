@@ -5,9 +5,16 @@
 
 echo "Stopping services..."
 
+# Docker command (use sudo if group not active yet)
+if docker info &>/dev/null 2>&1; then
+    DOCKER_CMD="docker"
+else
+    DOCKER_CMD="sudo docker"
+fi
+
 # OVMS container
-docker stop ovms-test 2>/dev/null && echo "  OVMS stopped" || true
-docker rm   ovms-test 2>/dev/null || true
+$DOCKER_CMD stop ovms-test 2>/dev/null && echo "  OVMS stopped" || true
+$DOCKER_CMD rm   ovms-test 2>/dev/null || true
 
 # Proxy process (by PID file or process name)
 if [[ -f /tmp/simple_proxy.pid ]]; then

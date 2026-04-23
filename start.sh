@@ -47,10 +47,17 @@ detect_device() {
     echo "CPU"
 }
 
-# ─── Cleanup ──────────────────────────────────────────────────────────────────
+# ─── Docker command (use sudo if group not active yet) ────────────────────────────────────────
+if docker info &>/dev/null 2>&1; then
+    DOCKER_CMD="docker"
+else
+    DOCKER_CMD="sudo docker"
+fi
+
+# ─── Cleanup ──────────────────────────────────────────────────────────────────────────────────
 echo "Stopping any existing services..."
-docker stop ovms-test 2>/dev/null || true
-docker rm   ovms-test 2>/dev/null || true
+$DOCKER_CMD stop ovms-test 2>/dev/null || true
+$DOCKER_CMD rm   ovms-test 2>/dev/null || true
 pkill -f "simple_proxy.py" 2>/dev/null || true
 # Free ports
 fuser -k ${PROXY_PORT}/tcp 2>/dev/null || true
@@ -70,7 +77,7 @@ for check in \
     fi
 done
 
-if ! docker images | grep -q "openvino/model_server"; then
+if ! $DOCKER_CMD images | grep -q "openvino/model_server"; then
     echo "ERROR: OVMS Docker image not found. Run: bash setup.sh"
     exit 1
 fi
@@ -96,7 +103,7 @@ if [[ "$TARGET_DEVICE" == "GPU" && -n "$RENDER_GID" ]]; then
     DOCKER_ARGS+=(--device /dev/dri --group-add "$RENDER_GID")
 fi
 
-docker run "${DOCKER_ARGS[@]}" \
+$DOCKER_CMD run "${DOCKER_ARGS[@]}" \
     "$OVMS_IMAGE" \
     --source_model OpenVINO/Phi-3.5-mini-instruct-int4-ov \
     --model_name "$MODEL_NAME" \
@@ -117,15 +124,15 @@ for i in $(seq 1 40); do
         echo ""; echo "OVMS ready (${TARGET_DEVICE})."
         break
     fi
-    if ! docker ps -q --filter name=ovms-test | grep -q .; then
+    if ! $DOCKER_CMD ps -q --filter name=ovms-test | grep -q .; then
         echo ""; echo "ERROR: OVMS container crashed."
-        docker logs ovms-test 2>&1 | tail -20
+        $DOCKER_CMD logs ovms-test 2>&1 | tail -20
         exit 1
     fi
 done
 
 if [[ "$STATUS" != "200" && "$STATUS" != "400" ]]; then
-    echo "ERROR: OVMS did not start in time. Check: docker logs ovms-test"
+    echo "ERROR: OVMS did not start in time. Check: $DOCKER_CMD logs ovms-test"
     exit 1
 fi
 
