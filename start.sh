@@ -111,7 +111,7 @@ $DOCKER_CMD run "${DOCKER_ARGS[@]}" \
     --task text_generation \
     --rest_port ${OVMS_PORT} \
     --target_device "$TARGET_DEVICE" \
-    --cache_size 2
+    --cache_size 8
 
 # ─── Wait for OVMS ────────────────────────────────────────────────────────────
 echo "Waiting for OVMS to be ready..."
