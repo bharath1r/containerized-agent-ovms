@@ -72,6 +72,8 @@ launch_claude() {
     # Map all model tiers to the local model
     export ANTHROPIC_MODEL="${OVMS_MODEL}"
     export ANTHROPIC_SMALL_FAST_MODEL="${OVMS_MODEL}"
+    # Ensure npm-global bin is in PATH (set by setup.sh, may not be in current session)
+    export PATH="${HOME}/.npm-global/bin:${PATH}"
     exec claude ${EXTRA_ARGS}
 }
 
