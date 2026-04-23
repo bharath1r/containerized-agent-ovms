@@ -16,7 +16,7 @@
 #   - Internet access (optionally via proxy)
 #
 # Usage:
-#   bash setup.sh [--proxy http://proxy.example.com:911] [--skip-aider]
+#   bash setup.sh [--proxy http://proxy.example.com:911] [--skip-aider] [--skip-model] [--skip-docker-pull]
 # =============================================================================
 
 set -euo pipefail
@@ -28,12 +28,16 @@ MODEL_DIR="${HOME}/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov"
 VENV_DIR="${HOME}/ovms-agent-env"
 SCRIPTS_DIR="${HOME}"
 INSTALL_AIDER=true
+SKIP_MODEL=false
+SKIP_DOCKER_PULL=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --proxy)       PROXY="$2"; shift 2 ;;
-        --skip-aider)  INSTALL_AIDER=false; shift ;;
+        --proxy)            PROXY="$2"; shift 2 ;;
+        --skip-aider)       INSTALL_AIDER=false; shift ;;
+        --skip-model)       SKIP_MODEL=true; shift ;;
+        --skip-docker-pull) SKIP_DOCKER_PULL=true; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -122,6 +126,17 @@ if ! command -v node &>/dev/null; then
     sudo apt-get install -y nodejs npm
 fi
 
+# Use a user-local npm prefix so npm install -g never needs sudo
+NPM_GLOBAL="${HOME}/.npm-global"
+mkdir -p "$NPM_GLOBAL"
+npm config set prefix "$NPM_GLOBAL"
+
+# Add it to PATH for this session and permanently via .bashrc
+export PATH="${NPM_GLOBAL}/bin:${PATH}"
+if ! grep -q 'NPM_GLOBAL' ~/.bashrc 2>/dev/null; then
+    echo 'export PATH="${HOME}/.npm-global/bin:${PATH}"' >> ~/.bashrc
+fi
+
 if [[ -n "$PROXY" ]]; then
     npm config set proxy "$PROXY"
     npm config set https-proxy "$PROXY"
@@ -136,13 +151,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " Phase 5: Download Phi-3.5-mini model"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-mkdir -p "$MODEL_DIR"
-
-if [[ -f "${MODEL_DIR}/openvino_model.bin" ]]; then
-    echo "Model already present, skipping download."
+if [[ "$SKIP_MODEL" == "true" ]]; then
+    echo "Skipping model download (--skip-model)"
 else
-    echo "Downloading ${MODEL_REPO} (~2GB)..."
-    python3 - <<PYEOF
+    mkdir -p "$MODEL_DIR"
+
+    if [[ -f "${MODEL_DIR}/openvino_model.bin" ]]; then
+        echo "Model already present, skipping download."
+    else
+        echo "Downloading ${MODEL_REPO} (~2GB)..."
+        python3 - <<PYEOF
 from huggingface_hub import snapshot_download
 import os, sys
 
@@ -159,10 +177,11 @@ for f in ["openvino_model.bin", "openvino_model.xml",
     print(f"OK: {f} ({os.path.getsize(full)/1e6:.1f} MB)")
 print("Model download complete.")
 PYEOF
-fi
+    fi
 
-# Make the model directory writable by Docker (OVMS runs as non-root)
-chmod -R a+rw "$MODEL_DIR"
+    # Make the model directory writable by Docker (OVMS runs as non-root)
+    chmod -R a+rw "$MODEL_DIR"
+fi
 
 # ─── Phase 6: Pull OVMS image ──────────────────────────────────────────────────
 echo ""
@@ -170,8 +189,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo " Phase 6: Pull OVMS Docker image"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-docker pull openvino/model_server:latest-gpu
-echo "OVMS image ready."
+if [[ "$SKIP_DOCKER_PULL" == "true" ]]; then
+    echo "Skipping Docker pull (--skip-docker-pull)"
+else
+    docker pull openvino/model_server:latest-gpu
+    echo "OVMS image ready."
+fi
 
 # ─── Phase 7: Install service scripts ─────────────────────────────────────────
 echo ""
