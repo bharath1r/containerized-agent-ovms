@@ -42,16 +42,29 @@ def anthropic_to_openai(data: dict) -> dict:
     """Convert Anthropic /v1/messages request body → OpenAI chat format."""
     messages = data.get("messages", [])
 
-    # Anthropic puts system prompt separately; move it into messages
+    # Anthropic puts system prompt separately; move it into messages.
+    # Claude Code sends a very large system prompt with tool definitions that
+    # overwhelms small models — keep only the first 1500 chars.
     system = data.get("system")
     if system:
-        messages = [{"role": "system", "content": system}] + messages
+        if isinstance(system, list):
+            # system can be a list of content blocks
+            system_text = " ".join(
+                b.get("text", "") for b in system if isinstance(b, dict)
+            )
+        else:
+            system_text = str(system)
+        system_text = system_text[:1500]
+        messages = [{"role": "system", "content": system_text}] + messages
+
+    # Cap max_tokens: Phi-3.5-mini produces nonsense beyond ~2048 tokens
+    max_tokens = min(int(data.get("max_tokens", 1024)), 2048)
 
     return {
         "model":       data.get("model", MODEL_NAME),
         "messages":    messages,
-        "max_tokens":  data.get("max_tokens", 1024),
-        "temperature": data.get("temperature", 0.7),
+        "max_tokens":  max_tokens,
+        "temperature": data.get("temperature", 0.1),  # low temp = coherent code output
         "stream":      data.get("stream", False),
     }
 
