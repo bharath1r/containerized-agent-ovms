@@ -34,7 +34,7 @@ def forward_to_ovms(openai_payload: dict) -> requests.Response:
         json=openai_payload,
         headers={"Content-Type": "application/json"},
         stream=openai_payload.get("stream", False),
-        timeout=120,
+        timeout=300,
     )
 
 
@@ -147,12 +147,62 @@ def anthropic_messages():
         return jsonify({"error": f"OVMS error {resp.status_code}: {resp.text}"}), 502
 
     if stream:
-        # Stream back as Anthropic SSE format
+        # Translate OpenAI SSE chunks → Anthropic SSE events
         def generate():
-            for chunk in resp.iter_lines():
-                if chunk:
-                    yield chunk.decode() + "\n"
-        return Response(stream_with_context(generate()), content_type="text/event-stream")
+            yield 'event: message_start\n'
+            yield 'data: ' + json.dumps({
+                "type": "message_start",
+                "message": {
+                    "id": "msg_stream", "type": "message", "role": "assistant",
+                    "content": [], "model": MODEL_NAME,
+                    "stop_reason": None, "stop_sequence": None,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                }
+            }) + '\n\n'
+            yield 'event: content_block_start\n'
+            yield 'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+            yield 'event: ping\n'
+            yield 'data: {"type":"ping"}\n\n'
+
+            output_tokens = 0
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                decoded = line.decode('utf-8', errors='replace')
+                if not decoded.startswith('data: '):
+                    continue
+                payload = decoded[6:]
+                if payload.strip() == '[DONE]':
+                    break
+                try:
+                    chunk = json.loads(payload)
+                    content = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                    if content:
+                        output_tokens += 1
+                        yield 'event: content_block_delta\n'
+                        yield 'data: ' + json.dumps({
+                            "type": "content_block_delta", "index": 0,
+                            "delta": {"type": "text_delta", "text": content},
+                        }) + '\n\n'
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+
+            yield 'event: content_block_stop\n'
+            yield 'data: {"type":"content_block_stop","index":0}\n\n'
+            yield 'event: message_delta\n'
+            yield 'data: ' + json.dumps({
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": output_tokens},
+            }) + '\n\n'
+            yield 'event: message_stop\n'
+            yield 'data: {"type":"message_stop"}\n\n'
+
+        return Response(
+            stream_with_context(generate()),
+            content_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+        )
 
     return jsonify(openai_to_anthropic(resp.json()))
 
