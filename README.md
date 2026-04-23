@@ -30,20 +30,20 @@ bash setup.sh                                  # no proxy
 bash setup.sh --proxy http://your-proxy:911    # behind a corporate proxy
 
 # ── Every session ────────────────────────────────────────────────────────────
-bash ~/start.sh           # auto-detects Intel GPU, falls back to CPU
-bash ~/start.sh --gpu     # force GPU (Intel Arc / Iris Xe)
-bash ~/start.sh --cpu     # force CPU
+bash start.sh           # auto-detects Intel GPU, falls back to CPU
+bash start.sh --gpu     # force GPU (Intel Arc / Iris Xe)
+bash start.sh --cpu     # force CPU
 
 # ── Launch your agent ────────────────────────────────────────────────────────
-bash ~/launch-agent.sh --agent claude                             # Claude Code
-bash ~/launch-agent.sh --agent aider                              # Aider
-bash ~/launch-agent.sh --agent aider --args "--no-auto-commits"   # Aider options
+bash launch-agent.sh --agent claude                             # Claude Code
+bash launch-agent.sh --agent aider                              # Aider
+bash launch-agent.sh --agent aider --args "--no-auto-commits"   # Aider options
 
 # Any OpenAI-compatible tool
-bash ~/launch-agent.sh --agent custom --cmd "mytool --api-base http://localhost:4000/v1 --model Phi-3.5-mini"
+bash launch-agent.sh --agent custom --cmd "mytool --api-base http://localhost:4000/v1 --model Phi-3.5-mini"
 
 # ── Stop services ────────────────────────────────────────────────────────────
-bash ~/stop.sh
+bash stop.sh
 ```
 
 ## Connection details (for manual config)
