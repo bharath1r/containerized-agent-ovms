@@ -31,6 +31,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# OVMS GenAI text generation pipeline does NOT support NPU target device.
+# --npu is kept as a flag but redirected to CPU with a warning.
+if [[ "${FORCE_DEVICE:-}" == "NPU" ]]; then
+    echo "WARNING: OVMS GenAI (--task text_generation) does not support NPU."
+    echo "         Falling back to CPU. Use --gpu for best performance."
+    FORCE_DEVICE="CPU"
+fi
+
 # Strip owner/ prefix if full HF repo path was passed (e.g. srang992/Llama-3.2-3B-Instruct-ov-INT4)
 # start.sh only needs the folder name (last segment) to locate the directory
 MODEL_NAME="${MODEL_NAME##*/}"
@@ -61,10 +69,8 @@ detect_device() {
         fi
     fi
     # Check for Intel NPU (/dev/accel/accel0 = Core Ultra NPU)
-    if [[ -e /dev/accel/accel0 ]]; then
-        echo "NPU"
-        return
-    fi
+    # NOTE: NPU is NOT supported for OVMS GenAI text_generation pipeline — skip in auto-detect
+    # if [[ -e /dev/accel/accel0 ]]; then echo "NPU"; return; fi
     echo "CPU"
 }
 

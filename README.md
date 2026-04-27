@@ -127,15 +127,15 @@ The `OVMS_MODEL` value must match the **folder name** of the downloaded model un
 
 **Some tested models:**
 
-| Model | HF repo | Size | Gated? | NPU? |
-|-------|---------|------|--------|------|
-| Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB | No | Yes |
-| Llama 3.2 3B (ungated) | `srang992/Llama-3.2-3B-Instruct-ov-INT4` | ~2 GB | No | No |
-| Llama 3.2 3B (ungated) | `llmware/llama-3.2-3b-instruct-ov` | ~2 GB | No | No |
-| Llama 3.2 3B (official) | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB | Yes* | Yes |
-| Llama 3.2 1B (official) | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB | Yes* | Yes |
-| Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB | No | No |
-| Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB | No | No |
+| Model | HF repo | Size | Gated? |
+|-------|---------|------|--------|
+| Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB | No |
+| Llama 3.2 3B (ungated) | `srang992/Llama-3.2-3B-Instruct-ov-INT4` | ~2 GB | No |
+| Llama 3.2 3B (ungated) | `llmware/llama-3.2-3b-instruct-ov` | ~2 GB | No |
+| Llama 3.2 3B (official) | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB | Yes* |
+| Llama 3.2 1B (official) | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB | Yes* |
+| Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB | No |
+| Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB | No |
 
 \* **Gated model** — requires accepting the license on HuggingFace and a token:
 1. Accept at `https://huggingface.co/<repo>`
@@ -156,12 +156,12 @@ The `OVMS_MODEL` value must match the **folder name** of the downloaded model un
 
 | Flag | Device | Requirement |
 |------|--------|-------------|
-| *(none)* | Auto: GPU → NPU → CPU | — |
+| *(none)* | Auto: GPU → CPU | — |
 | `--gpu` | Intel Arc / Iris Xe GPU | xe/i915 driver, `/dev/dri/renderD128` |
-| `--npu` | Intel Core Ultra NPU | `intel-npu-driver`, `/dev/accel/accel0` |
+| `--npu` | *(falls back to CPU)* | OVMS GenAI does not support NPU |
 | `--cpu` | CPU fallback | any x86 |
 
-**NPU note**: NPU requires models exported with NPU-targeted compilation. Community re-uploads (e.g. `srang992/`, `llmware/`) are CPU/GPU only and will fail on NPU with "Failed to compile for NPU". Use models from the official `OpenVINO/` org for NPU, e.g. `OpenVINO/Phi-3.5-mini-instruct-int4-ov`. GPU is recommended for best compatibility across all models.
+**NPU note**: The OVMS GenAI text generation pipeline (`--task text_generation`) does not support `--target_device NPU` — it crashes on init for all models. The `--npu` flag is accepted but automatically falls back to CPU with a warning. NPU support may be added in a future OVMS release.
 
 ## Verify GPU/NPU is being used
 
