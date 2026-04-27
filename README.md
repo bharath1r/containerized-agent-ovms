@@ -97,19 +97,33 @@ docker compose down
 Any model from the [OpenVINO org on HuggingFace](https://huggingface.co/OpenVINO) that is in INT4/INT8 IR format works.
 
 ```bash
-# 1. Download the model (one-time)
-bash setup.sh --model OpenVINO/Llama-3.2-3B-Instruct-int4-ov
+# 1. Download the model (one-time; --skip-aider --skip-docker-pull skips re-installing tools)
+bash setup.sh --model srang992/Llama-3.2-3B-Instruct-ov-INT4 --skip-aider --skip-docker-pull
 
-# 2a. Start with it — script mode
-bash start.sh --model Llama-3.2-3B-Instruct-int4-ov --gpu
+# 2. Stop any running session
+bash stop.sh
 
-# 2b. Start with it — compose mode
-MODEL_REPO=OpenVINO/Llama-3.2-3B-Instruct-int4-ov \
-OVMS_MODEL=Llama-3.2-3B-Instruct-int4-ov \
+# 3. Start OVMS with the new model
+bash start.sh --model srang992/Llama-3.2-3B-Instruct-ov-INT4 --gpu
+
+# 4. Launch an agent — set OVMS_MODEL to the folder name (last segment of the HF repo path)
+OVMS_MODEL=Llama-3.2-3B-Instruct-ov-INT4 bash launch-agent.sh --agent aider
+OVMS_MODEL=Llama-3.2-3B-Instruct-ov-INT4 bash launch-agent.sh --agent claude
+
+# Tip: export it once to avoid repeating it
+export OVMS_MODEL=Llama-3.2-3B-Instruct-ov-INT4
+bash launch-agent.sh --agent aider
+bash launch-agent.sh --agent claude
+```
+
+For compose mode:
+```bash
+MODEL_REPO=srang992/Llama-3.2-3B-Instruct-ov-INT4 \
+OVMS_MODEL=Llama-3.2-3B-Instruct-ov-INT4 \
 TARGET_DEVICE=GPU docker compose up -d
 ```
 
-The `MODEL_NAME` / `OVMS_MODEL` value must match the **folder name** of the downloaded model under `~/ovms-models/` (i.e., the last segment of the HuggingFace repo path).
+The `OVMS_MODEL` value must match the **folder name** of the downloaded model under `~/ovms-models/` (i.e. the last segment of the HuggingFace repo path: `owner/folder` → use `folder`).
 
 **Some tested models:**
 
@@ -157,5 +171,21 @@ docker inspect ovms-test --format '{{.Args}}' | grep target_device
 
 # Check graph config (definitive)
 cat ~/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov/graph.pbtxt | grep device
+```
+
+## Uninstall
+
+Remove individual components interactively:
+
+```bash
+bash uninstall.sh          # prompts yes/no for each component
+bash uninstall.sh --all    # remove everything without prompting
+```
+
+Components covered: running services, downloaded models, Python venv, OVMS Docker image, installed scripts, Claude Code.
+
+To delete just a single model without running uninstall.sh:
+```bash
+rm -rf ~/ovms-models/srang992/Llama-3.2-3B-Instruct-ov-INT4
 ```
 
