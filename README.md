@@ -158,10 +158,18 @@ The `OVMS_MODEL` value must match the **folder name** of the downloaded model un
 |------|--------|-------------|
 | *(none)* | Auto: GPU → NPU → CPU | — |
 | `--gpu` | Intel Arc / Iris Xe GPU | xe/i915 driver, `/dev/dri/renderD128` |
-| `--npu` | Intel Core Ultra NPU | `intel-npu-driver`, `/dev/accel` |
+| `--npu` | Intel Core Ultra NPU | `intel-npu-driver`, `/dev/accel/accel0`, NPU host libraries |
 | `--cpu` | CPU fallback | any x86 |
 
-**NPU note**: NPU support requires OVMS 2025.1+ and a model exported with *symmetric channel-wise INT4* quantization (`--sym --ratio 1.0 --group-size -1`). Standard HuggingFace INT4 exports (group-size 128) will crash on init. Use `export_model.py --target_device NPU` to produce a compatible model, or use a pre-built `-cw-ov` model such as `OpenVINO/Qwen3-8B-int4-cw-ov`. GPU is recommended for compatibility with all standard models.
+**NPU note**: NPU support requires OVMS 2025.1+ and several host-side prerequisites:
+
+1. **Driver**: `intel-npu-driver` — device node `/dev/accel/accel0` must exist
+2. **Host libraries** — must be present on the host (mounted read-only into the container automatically):
+   - `/usr/lib/x86_64-linux-gnu/libze_intel_npu.so.1`
+   - `/usr/lib/x86_64-linux-gnu/libnpu_driver_compiler.so`
+3. **Model quantization**: model must be exported with *symmetric channel-wise INT4* (`--sym --ratio 1.0 --group-size -1`). Standard HuggingFace INT4 exports (group-size 128) will crash on init. Use `export_model.py --target_device NPU`, or use a pre-built `-cw-ov` model such as `OpenVINO/Qwen3-8B-int4-cw-ov`.
+
+GPU is recommended for compatibility with all standard models.
 
 ## Verify GPU/NPU is being used
 
