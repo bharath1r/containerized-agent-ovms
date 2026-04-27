@@ -129,14 +129,33 @@ DOCKER_ARGS=(
 if [[ "$TARGET_DEVICE" == "GPU" && -n "$RENDER_GID" ]]; then
     DOCKER_ARGS+=(--device /dev/dri --group-add "$RENDER_GID")
 elif [[ "$TARGET_DEVICE" == "NPU" ]]; then
-    if [[ ! -e /dev/accel ]]; then
-        echo "ERROR: NPU device /dev/accel not found."
+    if [[ ! -e /dev/accel/accel0 ]]; then
+        echo "ERROR: NPU device /dev/accel/accel0 not found."
         echo "Install intel-npu-driver: https://github.com/intel/linux-npu-driver"
         exit 1
     fi
-    DOCKER_ARGS+=(-u "$(id -u):$(id -g)" --device /dev/accel)
-    # render group needed for Intel shared GPU/NPU runtime libs inside the container
+    
+    # Get group IDs
+    NPU_GID=$(stat -c '%g' /dev/accel/accel0)
+    RENDER_GID=$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")
+    
+    # Add NPU device and required volume mounts
+    DOCKER_ARGS+=(
+        --device /dev/accel/accel0:/dev/accel/accel0
+        --device /dev/dri:/dev/dri
+        --group-add "$NPU_GID"
+    )
+    
+    # Add render group if available
     [[ -n "$RENDER_GID" ]] && DOCKER_ARGS+=(--group-add "$RENDER_GID")
+    
+    # Mount NPU libraries
+    if [[ -f /usr/lib/x86_64-linux-gnu/libze_intel_npu.so.1 ]]; then
+        DOCKER_ARGS+=(-v /usr/lib/x86_64-linux-gnu/libze_intel_npu.so.1:/usr/lib/x86_64-linux-gnu/libze_intel_npu.so.1:ro)
+    fi
+    if [[ -f /usr/lib/x86_64-linux-gnu/libnpu_driver_compiler.so ]]; then
+        DOCKER_ARGS+=(-v /usr/lib/x86_64-linux-gnu/libnpu_driver_compiler.so:/usr/lib/x86_64-linux-gnu/libnpu_driver_compiler.so:ro)
+    fi
 fi
 
 # Build OVMS args — NPU uses Stateful pipeline (--max_prompt_len), others use Continuous Batching (--cache_size)
