@@ -45,11 +45,21 @@ services:
       --task text_generation
       --rest_port 8000
       --target_device ${TARGET_DEVICE:-GPU}
-      --cache_size 8
-    # GPU passthrough — only active when TARGET_DEVICE=GPU
-    # For NPU: change devices to /dev/accel/accel0
+      ${OVMS_EXTRA_ARGS:---cache_size 8}
+    # Device passthrough — controlled entirely by env vars:
+    #
+    #   GPU (default):
+    #     TARGET_DEVICE=GPU docker compose up -d
+    #     (DEVICE_NODE defaults to /dev/dri, OVMS_EXTRA_ARGS defaults to --cache_size 8)
+    #
+    #   NPU:
+    #     TARGET_DEVICE=NPU DEVICE_NODE=/dev/accel OVMS_EXTRA_ARGS="--max_prompt_len 2048" docker compose up -d
+    #
+    #   CPU (no device needed — /dev/dri passthrough is harmless on most machines):
+    #     TARGET_DEVICE=CPU OVMS_EXTRA_ARGS="" docker compose up -d
+    #
     devices:
-      - /dev/dri:/dev/dri
+      - "${DEVICE_NODE:-/dev/dri}:${DEVICE_NODE:-/dev/dri}"
     group_add:
       - ${RENDER_GID:-render}
     healthcheck:

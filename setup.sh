@@ -16,7 +16,10 @@
 #   - Internet access (optionally via proxy)
 #
 # Usage:
-#   bash setup.sh [--proxy http://proxy.example.com:911] [--model OpenVINO/Phi-3.5-mini-instruct-int4-ov] [--hf-token hf_xxx] [--skip-aider] [--skip-model] [--skip-docker-pull]
+#   bash setup.sh [--proxy http://proxy.example.com:911] [--model OpenVINO/Phi-3.5-mini-instruct-int4-ov] [--hf-token hf_xxx] [--npu] [--skip-aider] [--skip-model] [--skip-docker-pull]
+#
+#   --npu   Switches the default model to OpenVINO/Phi-3-mini-4k-instruct-int4-cw-ov
+#           (channel-wise INT4 — required for NPU; group-size-128 models crash on NPU init).
 # =============================================================================
 
 set -euo pipefail
@@ -31,19 +34,42 @@ SCRIPTS_DIR="${HOME}"
 INSTALL_AIDER=true
 SKIP_MODEL=false
 SKIP_DOCKER_PULL=false
+NPU_MODE=false
+MODEL_EXPLICITLY_SET=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --proxy)            PROXY="$2"; shift 2 ;;
-        --model)            MODEL_REPO="$2"; shift 2 ;;
+        --model)            MODEL_REPO="$2"; MODEL_EXPLICITLY_SET=true; shift 2 ;;
         --hf-token)         HF_TOKEN="$2"; shift 2 ;;
+        --npu)              NPU_MODE=true; shift ;;
         --skip-aider)       INSTALL_AIDER=false; shift ;;
         --skip-model)       SKIP_MODEL=true; shift ;;
         --skip-docker-pull) SKIP_DOCKER_PULL=true; shift ;;
-        *) echo "Unknown arg: $1"; echo "Usage: bash setup.sh [--proxy URL] [--model HF_REPO] [--hf-token TOKEN] [--skip-aider] [--skip-model] [--skip-docker-pull]"; exit 1 ;;
+        *) echo "Unknown arg: $1"; echo "Usage: bash setup.sh [--proxy URL] [--model HF_REPO] [--hf-token TOKEN] [--npu] [--skip-aider] [--skip-model] [--skip-docker-pull]"; exit 1 ;;
     esac
 done
+
+# ── NPU model selection ────────────────────────────────────────────────────────
+# NPU requires channel-wise INT4 quantization (-cw-ov suffix).
+# Group-size-128 models (the standard HF exports) crash on NPU init.
+if [[ "$NPU_MODE" == "true" ]]; then
+    if [[ "$MODEL_EXPLICITLY_SET" == "false" ]]; then
+        # Switch default to the NPU-compatible channel-wise model
+        MODEL_REPO="OpenVINO/Phi-3-mini-4k-instruct-int4-cw-ov"
+        echo "[--npu] Using NPU-compatible model: ${MODEL_REPO}"
+    elif [[ "$MODEL_REPO" != *"-cw-ov"* ]]; then
+        echo ""
+        echo "WARNING: --npu was specified but the model '${MODEL_REPO}' does not appear"
+        echo "         to be a channel-wise INT4 model (expected name to contain '-cw-ov')."
+        echo "         Standard group-size-128 models WILL CRASH on NPU init."
+        echo "         Recommended NPU model: OpenVINO/Phi-3-mini-4k-instruct-int4-cw-ov"
+        echo "         To use it: bash setup.sh --npu"
+        echo "         Continuing with '${MODEL_REPO}' — you have been warned."
+        echo ""
+    fi
+fi
 
 # Derive MODEL_NAME (OVMS serving name) and MODEL_DIR from the repo ID
 # Override MODEL_NAME via env: OVMS_MODEL=my-name bash setup.sh
@@ -266,7 +292,9 @@ echo "   bash launch-agent.sh --agent claude"
 echo "   bash launch-agent.sh --agent aider"
 echo ""
 echo " Option B — Compose mode (persistent stack):"
-echo "   TARGET_DEVICE=GPU docker compose up -d"
+echo "   GPU:  TARGET_DEVICE=GPU docker compose up -d"
+echo "   NPU:  TARGET_DEVICE=NPU DEVICE_NODE=/dev/accel OVMS_EXTRA_ARGS='--max_prompt_len 2048' docker compose up -d"
+echo "   CPU:  TARGET_DEVICE=CPU OVMS_EXTRA_ARGS='' docker compose up -d"
 echo "   Open WebUI: http://localhost:3000"
 echo "   docker compose down"
 echo ""
