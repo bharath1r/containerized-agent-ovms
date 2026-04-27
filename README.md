@@ -1,11 +1,11 @@
 # containerized-agent-ovms
 
-Local AI coding assistant using Claude Code + OpenVINO Model Server (OVMS) running Phi-3.5-mini on Intel CPU/GPU/NPU — no cloud API needed.
+Local AI coding assistant using Claude Code + OpenVINO Model Server (OVMS) on Intel CPU/GPU/NPU — no cloud API needed. Ships with Phi-3.5-mini by default; swap to any OpenVINO INT4/INT8 model with one flag.
 
 ## Architecture
 
 ```
-Any agent  →  simple_proxy.py (port 4000)  →  OVMS Docker (port 8000)  →  Phi-3.5-mini (INT4)
+Any agent  →  simple_proxy.py (port 4000)  →  OVMS Docker (port 8000)  →  any OpenVINO INT4/INT8 model
                Anthropic + OpenAI format          model server              Intel CPU / Arc GPU / NPU
 
 Open WebUI (port 3000)  ──────────────────────────────────────────────────────────────^
@@ -31,14 +31,16 @@ Open WebUI (port 3000)  ──────────────────�
 git clone https://github.com/bharath1r/containerized-agent-ovms.git
 cd containerized-agent-ovms
 
-bash setup.sh                                  # no proxy
+bash setup.sh                                  # no proxy, default model (Phi-3.5-mini)
 bash setup.sh --proxy http://your-proxy:911    # behind a corporate proxy
+bash setup.sh --model OpenVINO/Llama-3.2-3B-Instruct-int4-ov   # different model
 
 # ── Every session ────────────────────────────────────────────────────────────
 bash start.sh           # auto-detects Intel GPU → NPU → CPU
 bash start.sh --gpu     # force GPU (Intel Arc / Iris Xe)
 bash start.sh --npu     # force NPU (Intel Core Ultra — requires intel-npu-driver)
 bash start.sh --cpu     # force CPU
+bash start.sh --model Llama-3.2-3B-Instruct-int4-ov --gpu   # use a different model
 
 # ── Launch your agent ────────────────────────────────────────────────────────
 bash launch-agent.sh --agent claude                             # Claude Code
@@ -56,8 +58,21 @@ bash stop.sh
 
 ```bash
 # Start full stack (OVMS + proxy + Open WebUI)
-TARGET_DEVICE=GPU docker compose up -d     # GPU
+TARGET_DEVICE=GPU docker compose up -d     # GPU, default model
 TARGET_DEVICE=CPU docker compose up -d     # CPU
+
+# Use a different model (pass as env vars or put in .env file)
+MODEL_REPO=OpenVINO/Llama-3.2-3B-Instruct-int4-ov \
+OVMS_MODEL=Llama-3.2-3B-Instruct-int4-ov \
+TARGET_DEVICE=GPU docker compose up -d
+
+# Or via .env file (persistent across restarts)
+cat >> .env <<EOF
+MODEL_REPO=OpenVINO/Llama-3.2-3B-Instruct-int4-ov
+OVMS_MODEL=Llama-3.2-3B-Instruct-int4-ov
+TARGET_DEVICE=GPU
+EOF
+docker compose up -d
 
 # Open WebUI (browser chat — no agent install needed)
 # http://localhost:3000
@@ -77,6 +92,35 @@ docker compose down
 | Cursor | Override API base in settings | OpenAI |
 | Any OpenAI tool | `--api-base http://localhost:4000/v1 --api-key local-ovms` | OpenAI |
 
+## Changing the model
+
+Any model from the [OpenVINO org on HuggingFace](https://huggingface.co/OpenVINO) that is in INT4/INT8 IR format works.
+
+```bash
+# 1. Download the model (one-time)
+bash setup.sh --model OpenVINO/Llama-3.2-3B-Instruct-int4-ov
+
+# 2a. Start with it — script mode
+bash start.sh --model Llama-3.2-3B-Instruct-int4-ov --gpu
+
+# 2b. Start with it — compose mode
+MODEL_REPO=OpenVINO/Llama-3.2-3B-Instruct-int4-ov \
+OVMS_MODEL=Llama-3.2-3B-Instruct-int4-ov \
+TARGET_DEVICE=GPU docker compose up -d
+```
+
+The `MODEL_NAME` / `OVMS_MODEL` value must match the **folder name** of the downloaded model under `~/ovms-models/` (i.e., the last segment of the HuggingFace repo path).
+
+**Some tested models:**
+
+| Model | HF repo | Size |
+|-------|---------|------|
+| Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB |
+| Llama 3.2 3B | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB |
+| Llama 3.2 1B | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB |
+| Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB |
+| Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB |
+
 ## Connection details (for manual config)
 
 | Setting | Value |
@@ -84,7 +128,7 @@ docker compose down
 | OpenAI API base | `http://localhost:4000/v1` |
 | Anthropic API base | `http://localhost:4000` |
 | API key | any value (e.g. `local-ovms`) |
-| Model name | `Phi-3.5-mini` |
+| Model name | matches `OVMS_MODEL` (default: `Phi-3.5-mini-instruct-int4-ov`) |
 
 ## Hardware targets
 
