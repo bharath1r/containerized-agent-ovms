@@ -1,0 +1,11 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir flask requests
+
+COPY simple_proxy.py .
+
+EXPOSE 4000
+
+CMD ["python3", "simple_proxy.py"]

@@ -2,10 +2,10 @@
 # =============================================================================
 # start.sh — Start OVMS + proxy services
 #
-# Auto-detects Intel GPU (Arc/Iris Xe) and uses it if available, falls back to CPU.
-# Run this every time you want to use Claude Code with the local model.
+# Auto-detects Intel GPU (Arc/Iris Xe) → falls back to CPU.
+# NPU (Intel Core Ultra) supported with --npu flag (requires intel-npu-driver).
 #
-# Usage:  bash ~/start.sh [--cpu | --gpu]
+# Usage:  bash start.sh [--cpu | --gpu | --npu]
 # =============================================================================
 
 set -euo pipefail
@@ -24,11 +24,12 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --cpu) FORCE_DEVICE="CPU"; shift ;;
         --gpu) FORCE_DEVICE="GPU"; shift ;;
+        --npu) FORCE_DEVICE="NPU"; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
 
-# ─── Detect GPU ───────────────────────────────────────────────────────────────
+# ─── Detect device (GPU > NPU > CPU priority) ────────────────────────────────
 detect_device() {
     if [[ -n "$FORCE_DEVICE" ]]; then
         echo "$FORCE_DEVICE"
@@ -43,6 +44,11 @@ detect_device() {
             echo "GPU"
             return
         fi
+    fi
+    # Check for Intel NPU (/dev/accel/accel0 = Core Ultra NPU)
+    if [[ -e /dev/accel/accel0 ]]; then
+        echo "NPU"
+        return
     fi
     echo "CPU"
 }
@@ -88,6 +94,12 @@ chmod -R a+rw "$MODEL_DIR"
 # ─── Start OVMS ───────────────────────────────────────────────────────────────
 TARGET_DEVICE=$(detect_device)
 RENDER_GID=$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")
+NPU_GID=$(stat -c '%g' /dev/accel/accel0 2>/dev/null || echo "")
+
+# NPU requires OVMS image with NPU GenAI support
+if [[ "$TARGET_DEVICE" == "NPU" ]]; then
+    OVMS_IMAGE="openvino/model_server:latest-gpu"  # same image, NPU driver injected via device
+fi
 
 echo ""
 echo "Starting OVMS on ${TARGET_DEVICE}..."
@@ -101,6 +113,14 @@ DOCKER_ARGS=(
 
 if [[ "$TARGET_DEVICE" == "GPU" && -n "$RENDER_GID" ]]; then
     DOCKER_ARGS+=(--device /dev/dri --group-add "$RENDER_GID")
+elif [[ "$TARGET_DEVICE" == "NPU" ]]; then
+    if [[ ! -e /dev/accel/accel0 ]]; then
+        echo "ERROR: NPU device /dev/accel/accel0 not found."
+        echo "Install intel-npu-driver: https://github.com/intel/linux-npu-driver"
+        exit 1
+    fi
+    DOCKER_ARGS+=(--device /dev/accel/accel0)
+    [[ -n "$NPU_GID" ]] && DOCKER_ARGS+=(--group-add "$NPU_GID")
 fi
 
 $DOCKER_CMD run "${DOCKER_ARGS[@]}" \
@@ -159,7 +179,11 @@ echo "  OVMS:  http://localhost:${OVMS_PORT}  [${TARGET_DEVICE}]"
 echo "  Proxy: http://localhost:${PROXY_PORT}"
 echo ""
 echo " Launch an agent:"
-echo "  bash ~/launch-agent.sh --agent claude   # Claude Code"
-echo "  bash ~/launch-agent.sh --agent aider    # Aider"
-echo "  bash ~/launch-agent.sh --agent custom --cmd 'mytool --api-base http://localhost:${PROXY_PORT}/v1'"
+echo "  bash launch-agent.sh --agent claude   # Claude Code"
+echo "  bash launch-agent.sh --agent aider    # Aider"
+echo "  bash launch-agent.sh --agent custom --cmd 'mytool --api-base http://localhost:${PROXY_PORT}/v1'"
+echo ""
+echo " Or use Docker Compose stack (includes Open WebUI):"
+echo "  docker compose up -d"
+echo "  Open WebUI: http://localhost:3000"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -1,0 +1,97 @@
+# =============================================================================
+# docker-compose.yml — Full OVMS agent stack
+#
+# Services:
+#   ovms       — OpenVINO Model Server (Phi-3.5-mini INT4)
+#   proxy      — simple_proxy.py: Anthropic + OpenAI API → OVMS
+#   open-webui — Browser chat UI (optional, port 3000)
+#
+# Usage:
+#   # GPU (default auto-detect in start.sh, but compose always explicit)
+#   TARGET_DEVICE=GPU docker compose up -d
+#   TARGET_DEVICE=CPU docker compose up -d
+#   TARGET_DEVICE=NPU docker compose up -d
+#
+#   # Or just use start.sh which handles device detection automatically:
+#   bash start.sh [--gpu | --cpu | --npu]
+#
+# Stop:
+#   docker compose down
+# =============================================================================
+
+services:
+
+  # ── OpenVINO Model Server ──────────────────────────────────────────────────
+  ovms:
+    image: openvino/model_server:latest-gpu
+    container_name: ovms-test
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - "${HOME:-~}/ovms-models:/models:rw"
+    command: >
+      --source_model OpenVINO/Phi-3.5-mini-instruct-int4-ov
+      --model_name Phi-3.5-mini
+      --model_repository_path /models
+      --task text_generation
+      --rest_port 8000
+      --target_device ${TARGET_DEVICE:-GPU}
+      --cache_size 8
+    # GPU passthrough — only active when TARGET_DEVICE=GPU
+    # For NPU: change devices to /dev/accel/accel0
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - ${RENDER_GID:-render}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/v3/chat/completions"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ── Simple Proxy (Anthropic + OpenAI → OVMS) ──────────────────────────────
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    container_name: ovms-proxy
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      OVMS_URL: "http://ovms:8000/v3/chat/completions"
+      MODEL_NAME: "Phi-3.5-mini"
+      PROXY_PORT: "4000"
+    depends_on:
+      ovms:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Open WebUI (browser chat — optional) ──────────────────────────────────
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      # Point at our proxy so any model works (Anthropic + OpenAI format)
+      OPENAI_API_BASE_URL: "http://proxy:4000/v1"
+      OPENAI_API_KEY: "local-ovms"
+      # Disable built-in Ollama (we don't use it)
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_AUTH: "false"   # no login required (set to "true" for shared machines)
+    volumes:
+      - open-webui-data:/app/backend/data
+    depends_on:
+      proxy:
+        condition: service_healthy
+
+volumes:
+  open-webui-data:
