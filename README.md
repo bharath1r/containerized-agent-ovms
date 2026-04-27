@@ -156,12 +156,12 @@ The `OVMS_MODEL` value must match the **folder name** of the downloaded model un
 
 | Flag | Device | Requirement |
 |------|--------|-------------|
-| *(none)* | Auto: GPU → CPU | — |
+| *(none)* | Auto: GPU → NPU → CPU | — |
 | `--gpu` | Intel Arc / Iris Xe GPU | xe/i915 driver, `/dev/dri/renderD128` |
-| `--npu` | *(falls back to CPU)* | OVMS GenAI does not support NPU |
+| `--npu` | Intel Core Ultra NPU | `intel-npu-driver`, `/dev/accel` |
 | `--cpu` | CPU fallback | any x86 |
 
-**NPU note**: The OVMS GenAI text generation pipeline (`--task text_generation`) does not support `--target_device NPU` — it crashes on init for all models. The `--npu` flag is accepted but automatically falls back to CPU with a warning. NPU support may be added in a future OVMS release.
+**NPU note**: NPU support requires OVMS 2025.1+ and a model exported with *symmetric channel-wise INT4* quantization (`--sym --ratio 1.0 --group-size -1`). Standard HuggingFace INT4 exports (group-size 128) will crash on init. Use `export_model.py --target_device NPU` to produce a compatible model, or use a pre-built `-cw-ov` model such as `OpenVINO/Qwen3-8B-int4-cw-ov`. GPU is recommended for compatibility with all standard models.
 
 ## Verify GPU/NPU is being used
 

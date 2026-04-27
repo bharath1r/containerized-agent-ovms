@@ -2,8 +2,8 @@
 # =============================================================================
 # start.sh — Start OVMS + proxy services
 #
-# Auto-detects Intel GPU (Arc/Iris Xe) → falls back to CPU.
-# NPU (Intel Core Ultra) supported with --npu flag (requires intel-npu-driver).
+# Auto-detects Intel GPU (Arc/Iris Xe) → Intel NPU (Core Ultra) → CPU.
+# NPU requires OVMS 2025.1+ and a model exported with symmetric channel-wise INT4.
 #
 # Usage:  bash start.sh [--cpu | --gpu | --npu] [--model <serving-name>]
 # =============================================================================
@@ -30,14 +30,6 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; echo "Usage: bash start.sh [--gpu | --cpu | --npu] [--model <name>]"; exit 1 ;;
     esac
 done
-
-# OVMS GenAI text generation pipeline does NOT support NPU target device.
-# --npu is kept as a flag but redirected to CPU with a warning.
-if [[ "${FORCE_DEVICE:-}" == "NPU" ]]; then
-    echo "WARNING: OVMS GenAI (--task text_generation) does not support NPU."
-    echo "         Falling back to CPU. Use --gpu for best performance."
-    FORCE_DEVICE="CPU"
-fi
 
 # Strip owner/ prefix if full HF repo path was passed (e.g. srang992/Llama-3.2-3B-Instruct-ov-INT4)
 # start.sh only needs the folder name (last segment) to locate the directory
@@ -68,9 +60,11 @@ detect_device() {
             return
         fi
     fi
-    # Check for Intel NPU (/dev/accel/accel0 = Core Ultra NPU)
-    # NOTE: NPU is NOT supported for OVMS GenAI text_generation pipeline — skip in auto-detect
-    # if [[ -e /dev/accel/accel0 ]]; then echo "NPU"; return; fi
+    # Check for Intel NPU (/dev/accel = Core Ultra NPU; OVMS 2025.1+ supports GenAI on NPU)
+    if [[ -e /dev/accel ]]; then
+        echo "NPU"
+        return
+    fi
     echo "CPU"
 }
 
@@ -116,7 +110,7 @@ find "$MODEL_DIR" -user "$(id -u)" \( -type f -o -type d \) -exec chmod a+rw {} 
 # ─── Start OVMS ───────────────────────────────────────────────────────────────
 TARGET_DEVICE=$(detect_device)
 RENDER_GID=$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")
-NPU_GID=$(stat -c '%g' /dev/accel/accel0 2>/dev/null || echo "")
+NPU_GID=$(stat -c '%g' /dev/accel 2>/dev/null || echo "")
 
 # NPU requires OVMS image with NPU GenAI support
 if [[ "$TARGET_DEVICE" == "NPU" ]]; then
@@ -136,24 +130,31 @@ DOCKER_ARGS=(
 if [[ "$TARGET_DEVICE" == "GPU" && -n "$RENDER_GID" ]]; then
     DOCKER_ARGS+=(--device /dev/dri --group-add "$RENDER_GID")
 elif [[ "$TARGET_DEVICE" == "NPU" ]]; then
-    if [[ ! -e /dev/accel/accel0 ]]; then
-        echo "ERROR: NPU device /dev/accel/accel0 not found."
+    if [[ ! -e /dev/accel ]]; then
+        echo "ERROR: NPU device /dev/accel not found."
         echo "Install intel-npu-driver: https://github.com/intel/linux-npu-driver"
         exit 1
     fi
-    DOCKER_ARGS+=(--device /dev/accel/accel0)
+    DOCKER_ARGS+=(--device /dev/accel)
     [[ -n "$NPU_GID" ]] && DOCKER_ARGS+=(--group-add "$NPU_GID")
 fi
 
-$DOCKER_CMD run "${DOCKER_ARGS[@]}" \
-    "$OVMS_IMAGE" \
-    --source_model "${MODEL_DIR##*/ovms-models/}" \
-    --model_name "$MODEL_NAME" \
-    --model_repository_path /models \
-    --task text_generation \
-    --rest_port ${OVMS_PORT} \
-    --target_device "$TARGET_DEVICE" \
-    --cache_size 8
+# Build OVMS args — NPU uses Stateful pipeline (--max_prompt_len), others use Continuous Batching (--cache_size)
+OVMS_ARGS=(
+    --source_model "${MODEL_DIR##*/ovms-models/}"
+    --model_name "$MODEL_NAME"
+    --model_repository_path /models
+    --task text_generation
+    --rest_port ${OVMS_PORT}
+    --target_device "$TARGET_DEVICE"
+)
+if [[ "$TARGET_DEVICE" == "NPU" ]]; then
+    OVMS_ARGS+=(--max_prompt_len 2048)
+else
+    OVMS_ARGS+=(--cache_size 8)
+fi
+
+$DOCKER_CMD run "${DOCKER_ARGS[@]}" "$OVMS_IMAGE" "${OVMS_ARGS[@]}"
 
 # ─── Wait for OVMS ────────────────────────────────────────────────────────────
 echo "Waiting for OVMS to be ready..."
