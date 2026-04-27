@@ -27,9 +27,13 @@ while [[ $# -gt 0 ]]; do
         --gpu) FORCE_DEVICE="GPU"; shift ;;
         --npu) FORCE_DEVICE="NPU"; shift ;;
         --model) MODEL_NAME="$2"; shift 2 ;;
-        *) echo "Unknown arg: $1"; exit 1 ;;
+        *) echo "Unknown arg: $1"; echo "Usage: bash start.sh [--gpu | --cpu | --npu] [--model <name>]"; exit 1 ;;
     esac
 done
+
+# Strip owner/ prefix if full HF repo path was passed (e.g. srang992/Llama-3.2-3B-Instruct-ov-INT4)
+# start.sh only needs the folder name (last segment) to locate the directory
+MODEL_NAME="${MODEL_NAME##*/}"
 
 # Derive MODEL_DIR from model name — looks for it anywhere under ~/ovms-models/
 # e.g. ~/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov

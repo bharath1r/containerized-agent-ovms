@@ -41,7 +41,7 @@ while [[ $# -gt 0 ]]; do
         --skip-aider)       INSTALL_AIDER=false; shift ;;
         --skip-model)       SKIP_MODEL=true; shift ;;
         --skip-docker-pull) SKIP_DOCKER_PULL=true; shift ;;
-        *) echo "Unknown arg: $1"; exit 1 ;;
+        *) echo "Unknown arg: $1"; echo "Usage: bash setup.sh [--proxy URL] [--model HF_REPO] [--hf-token TOKEN] [--skip-aider] [--skip-model] [--skip-docker-pull]"; exit 1 ;;
     esac
 done
 
