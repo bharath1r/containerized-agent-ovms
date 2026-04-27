@@ -113,13 +113,19 @@ The `MODEL_NAME` / `OVMS_MODEL` value must match the **folder name** of the down
 
 **Some tested models:**
 
-| Model | HF repo | Size |
-|-------|---------|------|
-| Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB |
-| Llama 3.2 3B | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB |
-| Llama 3.2 1B | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB |
-| Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB |
-| Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB |
+| Model | HF repo | Size | Gated? |
+|-------|---------|------|--------|
+| Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB | No |
+| Llama 3.2 3B | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB | Yes* |
+| Llama 3.2 1B | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB | Yes* |
+| Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB | No |
+| Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB | No |
+
+\* **Gated model** — requires accepting the license on HuggingFace and a token:
+1. Accept at `https://huggingface.co/<repo>`
+2. Get a token at `https://huggingface.co/settings/tokens`
+3. Pass it: `bash setup.sh --model <repo> --hf-token hf_YOUR_TOKEN`  
+   or via env: `HF_TOKEN=hf_xxx bash setup.sh --model <repo>`
 
 ## Connection details (for manual config)
 

@@ -16,7 +16,7 @@
 #   - Internet access (optionally via proxy)
 #
 # Usage:
-#   bash setup.sh [--proxy http://proxy.example.com:911] [--model OpenVINO/Phi-3.5-mini-instruct-int4-ov] [--skip-aider] [--skip-model] [--skip-docker-pull]
+#   bash setup.sh [--proxy http://proxy.example.com:911] [--model OpenVINO/Phi-3.5-mini-instruct-int4-ov] [--hf-token hf_xxx] [--skip-aider] [--skip-model] [--skip-docker-pull]
 # =============================================================================
 
 set -euo pipefail
@@ -24,6 +24,7 @@ set -euo pipefail
 # ─── Configuration ─────────────────────────────────────────────────────────────
 PROXY="${PROXY:-}"                          # Set via env or --proxy flag
 MODEL_REPO="${MODEL_REPO:-OpenVINO/Phi-3.5-mini-instruct-int4-ov}"
+HF_TOKEN="${HF_TOKEN:-}"                    # HuggingFace token for gated models
 # MODEL_NAME and MODEL_DIR are derived after arg parsing (see below)
 VENV_DIR="${HOME}/ovms-agent-env"
 SCRIPTS_DIR="${HOME}"
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --proxy)            PROXY="$2"; shift 2 ;;
         --model)            MODEL_REPO="$2"; shift 2 ;;
+        --hf-token)         HF_TOKEN="$2"; shift 2 ;;
         --skip-aider)       INSTALL_AIDER=false; shift ;;
         --skip-model)       SKIP_MODEL=true; shift ;;
         --skip-docker-pull) SKIP_DOCKER_PULL=true; shift ;;
@@ -181,15 +183,29 @@ else
         echo "Model already present, skipping download."
     else
         echo "Downloading ${MODEL_REPO} (~2-8GB depending on model)..."
-        python3 - <<PYEOF
+        HF_TOKEN="${HF_TOKEN}" python3 - <<PYEOF
 from huggingface_hub import snapshot_download
+from huggingface_hub.errors import RepositoryNotFoundError, GatedRepoError
 import os, sys
 
-path = snapshot_download(
-    repo_id="${MODEL_REPO}",
-    local_dir="${MODEL_DIR}",
-    local_dir_use_symlinks=False,
-)
+tok = os.environ.get("HF_TOKEN") or None
+try:
+    path = snapshot_download(
+        repo_id="${MODEL_REPO}",
+        local_dir="${MODEL_DIR}",
+        token=tok,
+    )
+except (RepositoryNotFoundError, Exception) as e:
+    msg = str(e)
+    if "401" in msg or "gated" in msg.lower() or "authentication" in msg.lower():
+        print("\nERROR: This model is gated or requires authentication.", file=sys.stderr)
+        print("  1. Accept the license at: https://huggingface.co/${MODEL_REPO}", file=sys.stderr)
+        print("  2. Get a token at:         https://huggingface.co/settings/tokens", file=sys.stderr)
+        print("  3. Re-run with:            bash setup.sh --model ${MODEL_REPO} --hf-token hf_YOUR_TOKEN", file=sys.stderr)
+        print("     Or set env var:         HF_TOKEN=hf_xxx bash setup.sh --model ${MODEL_REPO}", file=sys.stderr)
+    else:
+        print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
 for f in ["openvino_model.bin", "openvino_model.xml",
           "openvino_tokenizer.bin", "openvino_detokenizer.bin"]:
     full = os.path.join(path, f)
