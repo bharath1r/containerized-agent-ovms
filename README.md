@@ -116,8 +116,10 @@ The `MODEL_NAME` / `OVMS_MODEL` value must match the **folder name** of the down
 | Model | HF repo | Size | Gated? |
 |-------|---------|------|--------|
 | Phi-3.5-mini (default) | `OpenVINO/Phi-3.5-mini-instruct-int4-ov` | ~2 GB | No |
-| Llama 3.2 3B | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB | Yes* |
-| Llama 3.2 1B | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB | Yes* |
+| Llama 3.2 3B (ungated) | `srang992/Llama-3.2-3B-Instruct-ov-INT4` | ~2 GB | No |
+| Llama 3.2 3B (ungated) | `llmware/llama-3.2-3b-instruct-ov` | ~2 GB | No |
+| Llama 3.2 3B (official) | `OpenVINO/Llama-3.2-3B-Instruct-int4-ov` | ~2 GB | Yes* |
+| Llama 3.2 1B (official) | `OpenVINO/Llama-3.2-1B-Instruct-int4-ov` | ~1 GB | Yes* |
 | Qwen2.5 7B | `OpenVINO/Qwen2.5-7B-Instruct-int4-ov` | ~4.5 GB | No |
 | Mistral 7B | `OpenVINO/Mistral-7B-Instruct-v0.2-int4-ov` | ~4.5 GB | No |
 
