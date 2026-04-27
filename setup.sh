@@ -221,8 +221,9 @@ print("Model download complete.")
 PYEOF
     fi
 
-    # Make the model directory writable by Docker (OVMS runs as non-root)
-    chmod -R a+rw "$MODEL_DIR"
+    # Make model files readable/writable by Docker — only touch files we own
+    # (OVMS may later write root-owned cache files; skip those)
+    find "$MODEL_DIR" -user "$(id -u)" \( -type f -o -type d \) -exec chmod a+rw {} + 2>/dev/null || true
 fi
 
 # ─── Phase 6: Pull OVMS image ──────────────────────────────────────────────────

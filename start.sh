@@ -103,8 +103,9 @@ if ! $DOCKER_CMD images | grep -q "openvino/model_server"; then
     exit 1
 fi
 
-# Ensure model dir is writable by Docker container
-chmod -R a+rw "$MODEL_DIR"
+# Make model files readable/writable by Docker — only touch files we own
+# (graph.pbtxt and cache files may be root-owned from a previous OVMS run)
+find "$MODEL_DIR" -user "$(id -u)" \( -type f -o -type d \) -exec chmod a+rw {} + 2>/dev/null || true
 
 # ─── Start OVMS ───────────────────────────────────────────────────────────────
 TARGET_DEVICE=$(detect_device)
