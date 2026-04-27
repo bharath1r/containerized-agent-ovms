@@ -46,7 +46,12 @@ if [[ -n "$PROXY" ]]; then
     export HTTP_PROXY="$PROXY"
     export HTTPS_PROXY="$PROXY"
     export NO_PROXY="localhost,127.0.0.1,*.intel.com"
+    # Explicit curl args so the right proxy is used even if the system env is wrong
+    CURL_PROXY_ARGS=(--proxy "$PROXY")
     echo "Using proxy: $PROXY"
+else
+    # Override any stale/broken system proxy env for curl
+    CURL_PROXY_ARGS=(--noproxy '*')
 fi
 
 # ─── Phase 1: System packages ─────────────────────────────────────────────────
@@ -69,7 +74,7 @@ if command -v docker &>/dev/null; then
 else
     sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
     sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    curl -fsSL "${CURL_PROXY_ARGS[@]}" https://download.docker.com/linux/ubuntu/gpg \
         | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     sudo chmod a+r /etc/apt/keyrings/docker.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
