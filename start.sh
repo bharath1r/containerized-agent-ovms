@@ -110,7 +110,6 @@ find "$MODEL_DIR" -user "$(id -u)" \( -type f -o -type d \) -exec chmod a+rw {} 
 # ─── Start OVMS ───────────────────────────────────────────────────────────────
 TARGET_DEVICE=$(detect_device)
 RENDER_GID=$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")
-NPU_GID=$(stat -c '%g' /dev/accel 2>/dev/null || echo "")
 
 # NPU requires OVMS image with NPU GenAI support
 if [[ "$TARGET_DEVICE" == "NPU" ]]; then
@@ -135,8 +134,9 @@ elif [[ "$TARGET_DEVICE" == "NPU" ]]; then
         echo "Install intel-npu-driver: https://github.com/intel/linux-npu-driver"
         exit 1
     fi
-    DOCKER_ARGS+=(--device /dev/accel)
-    [[ -n "$NPU_GID" ]] && DOCKER_ARGS+=(--group-add "$NPU_GID")
+    DOCKER_ARGS+=(-u "$(id -u):$(id -g)" --device /dev/accel)
+    # render group needed for Intel shared GPU/NPU runtime libs inside the container
+    [[ -n "$RENDER_GID" ]] && DOCKER_ARGS+=(--group-add "$RENDER_GID")
 fi
 
 # Build OVMS args — NPU uses Stateful pipeline (--max_prompt_len), others use Continuous Batching (--cache_size)
