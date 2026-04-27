@@ -46,15 +46,17 @@ done
 # ─── Verify services are running ──────────────────────────────────────────────
 check_services() {
     local proxy_ok ovms_ok
-    proxy_ok=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${PROXY_PORT}/health 2>/dev/null || echo "000")
+    # /v1/models is always present (even old proxy builds); /health may not exist in old installs
+    proxy_ok=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${PROXY_PORT}/v1/models 2>/dev/null || echo "000")
     ovms_ok=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${OVMS_PORT}/v3/chat/completions 2>/dev/null || echo "000")
 
-    if [[ "$proxy_ok" != "200" ]]; then
-        echo "ERROR: Proxy not running on port ${PROXY_PORT}. Run: bash ~/start.sh"
+    # OVMS returns 400 on bare GET, 405 on some versions — anything but 000 means it's up
+    if [[ "$proxy_ok" == "000" ]]; then
+        echo "ERROR: Proxy not running on port ${PROXY_PORT}. Run: bash start.sh"
         exit 1
     fi
-    if [[ "$ovms_ok" != "200" && "$ovms_ok" != "400" ]]; then
-        echo "ERROR: OVMS not running on port ${OVMS_PORT}. Run: bash ~/start.sh"
+    if [[ "$ovms_ok" == "000" ]]; then
+        echo "ERROR: OVMS not running on port ${OVMS_PORT}. Run: bash start.sh"
         exit 1
     fi
     echo "Services OK  [OVMS: ${ovms_ok}  Proxy: ${proxy_ok}]"
