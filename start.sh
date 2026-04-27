@@ -157,7 +157,18 @@ for i in $(seq 1 40); do
         http://localhost:${OVMS_PORT}/v3/chat/completions 2>/dev/null || echo "000")
     printf "  [%d/40] HTTP %s\r" "$i" "$STATUS"
     if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
-        echo ""; echo "OVMS ready (${TARGET_DEVICE})."
+        echo ""; 
+        # Wait a moment and confirm the container is still running (not a brief init response)
+        sleep 2
+        if ! $DOCKER_CMD ps -q --filter name=ovms-test | grep -q .; then
+            echo "ERROR: OVMS container exited immediately after responding — model may not be supported on ${TARGET_DEVICE}."
+            echo "Logs:"
+            $DOCKER_CMD logs ovms-test 2>&1 | tail -30
+            echo ""
+            echo "Try: bash start.sh --model ${MODEL_NAME} --gpu"
+            exit 1
+        fi
+        echo "OVMS ready (${TARGET_DEVICE})."
         break
     fi
     if ! $DOCKER_CMD ps -q --filter name=ovms-test | grep -q .; then
