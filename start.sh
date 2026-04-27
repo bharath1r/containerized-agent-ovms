@@ -5,15 +5,16 @@
 # Auto-detects Intel GPU (Arc/Iris Xe) → falls back to CPU.
 # NPU (Intel Core Ultra) supported with --npu flag (requires intel-npu-driver).
 #
-# Usage:  bash start.sh [--cpu | --gpu | --npu]
+# Usage:  bash start.sh [--cpu | --gpu | --npu] [--model <serving-name>]
 # =============================================================================
 
 set -euo pipefail
 
 OVMS_PORT=8000
 PROXY_PORT=4000
-MODEL_NAME="Phi-3.5-mini"
-MODEL_DIR="${HOME}/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov"
+# MODEL_NAME: OVMS serving name. Override via --model flag or OVMS_MODEL env var.
+# Must match the folder name under ~/ovms-models/ (i.e. the HF repo's last path segment).
+MODEL_NAME="${OVMS_MODEL:-Phi-3.5-mini-instruct-int4-ov}"
 VENV_DIR="${HOME}/ovms-agent-env"
 PROXY_SCRIPT="${HOME}/simple_proxy.py"
 OVMS_IMAGE="openvino/model_server:latest-gpu"
@@ -25,9 +26,19 @@ while [[ $# -gt 0 ]]; do
         --cpu) FORCE_DEVICE="CPU"; shift ;;
         --gpu) FORCE_DEVICE="GPU"; shift ;;
         --npu) FORCE_DEVICE="NPU"; shift ;;
+        --model) MODEL_NAME="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+# Derive MODEL_DIR from model name — looks for it anywhere under ~/ovms-models/
+# e.g. ~/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov
+MODEL_DIR=$(find "${HOME}/ovms-models" -maxdepth 3 -type d -name "${MODEL_NAME}" 2>/dev/null | head -1)
+if [[ -z "$MODEL_DIR" ]]; then
+    echo "ERROR: Model directory for '${MODEL_NAME}' not found under ~/ovms-models/"
+    echo "       Run: bash setup.sh --model <hf_repo_id>   to download it first."
+    exit 1
+fi
 
 # ─── Detect device (GPU > NPU > CPU priority) ────────────────────────────────
 detect_device() {
@@ -125,7 +136,7 @@ fi
 
 $DOCKER_CMD run "${DOCKER_ARGS[@]}" \
     "$OVMS_IMAGE" \
-    --source_model OpenVINO/Phi-3.5-mini-instruct-int4-ov \
+    --source_model "${MODEL_DIR##*/ovms-models/}" \
     --model_name "$MODEL_NAME" \
     --model_repository_path /models \
     --task text_generation \

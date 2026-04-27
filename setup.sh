@@ -16,15 +16,15 @@
 #   - Internet access (optionally via proxy)
 #
 # Usage:
-#   bash setup.sh [--proxy http://proxy.example.com:911] [--skip-aider] [--skip-model] [--skip-docker-pull]
+#   bash setup.sh [--proxy http://proxy.example.com:911] [--model OpenVINO/Phi-3.5-mini-instruct-int4-ov] [--skip-aider] [--skip-model] [--skip-docker-pull]
 # =============================================================================
 
 set -euo pipefail
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 PROXY="${PROXY:-}"                          # Set via env or --proxy flag
-MODEL_REPO="OpenVINO/Phi-3.5-mini-instruct-int4-ov"
-MODEL_DIR="${HOME}/ovms-models/OpenVINO/Phi-3.5-mini-instruct-int4-ov"
+MODEL_REPO="${MODEL_REPO:-OpenVINO/Phi-3.5-mini-instruct-int4-ov}"
+# MODEL_NAME and MODEL_DIR are derived after arg parsing (see below)
 VENV_DIR="${HOME}/ovms-agent-env"
 SCRIPTS_DIR="${HOME}"
 INSTALL_AIDER=true
@@ -35,12 +35,20 @@ SKIP_DOCKER_PULL=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --proxy)            PROXY="$2"; shift 2 ;;
+        --model)            MODEL_REPO="$2"; shift 2 ;;
         --skip-aider)       INSTALL_AIDER=false; shift ;;
         --skip-model)       SKIP_MODEL=true; shift ;;
         --skip-docker-pull) SKIP_DOCKER_PULL=true; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
+
+# Derive MODEL_NAME (OVMS serving name) and MODEL_DIR from the repo ID
+# Override MODEL_NAME via env: OVMS_MODEL=my-name bash setup.sh
+# e.g. OpenVINO/Phi-3.5-mini-instruct-int4-ov  →  folder = Phi-3.5-mini-instruct-int4-ov
+MODEL_FOLDER="${MODEL_REPO##*/}"
+MODEL_NAME="${OVMS_MODEL:-${MODEL_FOLDER}}"
+MODEL_DIR="${HOME}/ovms-models/${MODEL_REPO}"
 
 if [[ -n "$PROXY" ]]; then
     export HTTP_PROXY="$PROXY"
@@ -161,7 +169,7 @@ echo "Claude Code installed: $(claude --version)"
 # ─── Phase 5: Download model ──────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo " Phase 5: Download Phi-3.5-mini model"
+echo " Phase 5: Download model: ${MODEL_REPO}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [[ "$SKIP_MODEL" == "true" ]]; then
@@ -172,7 +180,7 @@ else
     if [[ -f "${MODEL_DIR}/openvino_model.bin" ]]; then
         echo "Model already present, skipping download."
     else
-        echo "Downloading ${MODEL_REPO} (~2GB)..."
+        echo "Downloading ${MODEL_REPO} (~2-8GB depending on model)..."
         python3 - <<PYEOF
 from huggingface_hub import snapshot_download
 import os, sys
