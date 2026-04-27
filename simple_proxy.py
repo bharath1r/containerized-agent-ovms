@@ -14,6 +14,7 @@ All requests are forwarded to OVMS at http://localhost:8000/v3/chat/completions
 
 import os
 import json
+import traceback
 import requests
 from flask import Flask, request, jsonify, Response, stream_with_context
 
@@ -90,6 +91,12 @@ def openai_to_anthropic(openai_resp: dict) -> dict:
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for unhandled exceptions."""
+    traceback.print_exc()
+    return jsonify({"error": {"message": str(e), "type": type(e).__name__}}), 500
+
 @app.route("/health", methods=["GET"])
 def health():
     """Health check — also probes OVMS."""
@@ -126,22 +133,29 @@ def openai_chat():
     OpenAI-format endpoint — used by Aider, Continue.dev, Cursor, etc.
     Passes through directly to OVMS (same format).
     """
-    payload = request.json or {}
-    payload.setdefault("model", MODEL_NAME)
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        payload.setdefault("model", MODEL_NAME)
 
-    stream = payload.get("stream", False)
-    resp = forward_to_ovms(payload)
+        stream = payload.get("stream", False)
+        resp = forward_to_ovms(payload)
 
-    if resp.status_code != 200:
-        return jsonify({"error": f"OVMS error {resp.status_code}: {resp.text}"}), 502
+        if resp.status_code != 200:
+            return jsonify({"error": {"message": f"OVMS error {resp.status_code}: {resp.text[:500]}", "type": "upstream_error"}}), 502
 
-    if stream:
-        return Response(
-            stream_with_context(resp.iter_content(chunk_size=None)),
-            content_type=resp.headers.get("Content-Type", "text/event-stream"),
-        )
+        if stream:
+            return Response(
+                stream_with_context(resp.iter_content(chunk_size=None)),
+                content_type=resp.headers.get("Content-Type", "text/event-stream"),
+            )
 
-    return jsonify(resp.json())
+        try:
+            return jsonify(resp.json())
+        except Exception:
+            return jsonify({"error": {"message": f"OVMS returned non-JSON: {resp.text[:200]}", "type": "parse_error"}}), 502
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": {"message": str(e), "type": type(e).__name__}}), 500
 
 
 @app.route("/v1/messages", methods=["POST"])
@@ -150,74 +164,82 @@ def anthropic_messages():
     Anthropic-format endpoint — used by Claude Code.
     Converts request to OpenAI format, forwards to OVMS, converts response back.
     """
-    data = request.json or {}
-    openai_payload = anthropic_to_openai(data)
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        openai_payload = anthropic_to_openai(data)
 
-    stream = openai_payload.get("stream", False)
-    resp = forward_to_ovms(openai_payload)
+        stream = openai_payload.get("stream", False)
+        resp = forward_to_ovms(openai_payload)
 
-    if resp.status_code != 200:
-        return jsonify({"error": f"OVMS error {resp.status_code}: {resp.text}"}), 502
+        if resp.status_code != 200:
+            return jsonify({"error": {"message": f"OVMS error {resp.status_code}: {resp.text[:500]}", "type": "upstream_error"}}), 502
 
-    if stream:
-        # Translate OpenAI SSE chunks → Anthropic SSE events
-        def generate():
-            yield 'event: message_start\n'
-            yield 'data: ' + json.dumps({
-                "type": "message_start",
-                "message": {
-                    "id": "msg_stream", "type": "message", "role": "assistant",
-                    "content": [], "model": MODEL_NAME,
-                    "stop_reason": None, "stop_sequence": None,
-                    "usage": {"input_tokens": 0, "output_tokens": 0},
-                }
-            }) + '\n\n'
-            yield 'event: content_block_start\n'
-            yield 'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
-            yield 'event: ping\n'
-            yield 'data: {"type":"ping"}\n\n'
+        if stream:
+            # Translate OpenAI SSE chunks → Anthropic SSE events
+            def generate():
+                yield 'event: message_start\n'
+                yield 'data: ' + json.dumps({
+                    "type": "message_start",
+                    "message": {
+                        "id": "msg_stream", "type": "message", "role": "assistant",
+                        "content": [], "model": MODEL_NAME,
+                        "stop_reason": None, "stop_sequence": None,
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                    }
+                }) + '\n\n'
+                yield 'event: content_block_start\n'
+                yield 'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+                yield 'event: ping\n'
+                yield 'data: {"type":"ping"}\n\n'
 
-            output_tokens = 0
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                decoded = line.decode('utf-8', errors='replace')
-                if not decoded.startswith('data: '):
-                    continue
-                payload = decoded[6:]
-                if payload.strip() == '[DONE]':
-                    break
-                try:
-                    chunk = json.loads(payload)
-                    content = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                    if content:
-                        output_tokens += 1
-                        yield 'event: content_block_delta\n'
-                        yield 'data: ' + json.dumps({
-                            "type": "content_block_delta", "index": 0,
-                            "delta": {"type": "text_delta", "text": content},
-                        }) + '\n\n'
-                except (json.JSONDecodeError, KeyError, IndexError):
-                    pass
+                output_tokens = 0
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    decoded = line.decode('utf-8', errors='replace')
+                    if not decoded.startswith('data: '):
+                        continue
+                    chunk_str = decoded[6:]
+                    if chunk_str.strip() == '[DONE]':
+                        break
+                    try:
+                        chunk = json.loads(chunk_str)
+                        content = chunk.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                        if content:
+                            output_tokens += 1
+                            yield 'event: content_block_delta\n'
+                            yield 'data: ' + json.dumps({
+                                "type": "content_block_delta", "index": 0,
+                                "delta": {"type": "text_delta", "text": content},
+                            }) + '\n\n'
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        pass
 
-            yield 'event: content_block_stop\n'
-            yield 'data: {"type":"content_block_stop","index":0}\n\n'
-            yield 'event: message_delta\n'
-            yield 'data: ' + json.dumps({
-                "type": "message_delta",
-                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-                "usage": {"output_tokens": output_tokens},
-            }) + '\n\n'
-            yield 'event: message_stop\n'
-            yield 'data: {"type":"message_stop"}\n\n'
+                yield 'event: content_block_stop\n'
+                yield 'data: {"type":"content_block_stop","index":0}\n\n'
+                yield 'event: message_delta\n'
+                yield 'data: ' + json.dumps({
+                    "type": "message_delta",
+                    "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                    "usage": {"output_tokens": output_tokens},
+                }) + '\n\n'
+                yield 'event: message_stop\n'
+                yield 'data: {"type":"message_stop"}\n\n'
 
-        return Response(
-            stream_with_context(generate()),
-            content_type="text/event-stream",
-            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
-        )
+            return Response(
+                stream_with_context(generate()),
+                content_type="text/event-stream",
+                headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+            )
 
-    return jsonify(openai_to_anthropic(resp.json()))
+        try:
+            return jsonify(openai_to_anthropic(resp.json()))
+        except Exception:
+            return jsonify({"error": {"message": f"OVMS returned non-JSON: {resp.text[:200]}", "type": "parse_error"}}), 502
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": {"message": str(e), "type": type(e).__name__}}), 500
 
 
 # ─── Entry point ──────────────────────────────────────────────────────────────
