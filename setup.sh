@@ -198,11 +198,14 @@ try:
 except (RepositoryNotFoundError, Exception) as e:
     msg = str(e)
     if "401" in msg or "gated" in msg.lower() or "authentication" in msg.lower():
-        print("\nERROR: This model is gated or requires authentication.", file=sys.stderr)
-        print("  1. Accept the license at: https://huggingface.co/${MODEL_REPO}", file=sys.stderr)
-        print("  2. Get a token at:         https://huggingface.co/settings/tokens", file=sys.stderr)
-        print("  3. Re-run with:            bash setup.sh --model ${MODEL_REPO} --hf-token hf_YOUR_TOKEN", file=sys.stderr)
-        print("     Or set env var:         HF_TOKEN=hf_xxx bash setup.sh --model ${MODEL_REPO}", file=sys.stderr)
+        print("\nERROR: This model is gated — authentication required.", file=sys.stderr)
+        print("  Step 1: Log in to HuggingFace and ACCEPT the license:", file=sys.stderr)
+        print("          https://huggingface.co/${MODEL_REPO}", file=sys.stderr)
+        print("          (click 'Agree and access repository' on that page)", file=sys.stderr)
+        print("  Step 2: Get a token (read access):  https://huggingface.co/settings/tokens", file=sys.stderr)
+        print("  Step 3: Re-run:", file=sys.stderr)
+        print("          bash setup.sh --model ${MODEL_REPO} --hf-token hf_YOUR_TOKEN", file=sys.stderr)
+        print("  Note: A valid token alone is NOT enough — you must accept the license first.", file=sys.stderr)
     else:
         print(f"ERROR: {e}", file=sys.stderr)
     sys.exit(1)
