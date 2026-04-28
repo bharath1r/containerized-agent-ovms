@@ -49,7 +49,6 @@ def anthropic_to_openai(data: dict) -> dict:
     system = data.get("system")
     if system:
         if isinstance(system, list):
-            # system can be a list of content blocks
             system_text = " ".join(
                 b.get("text", "") for b in system if isinstance(b, dict)
             )
@@ -58,14 +57,13 @@ def anthropic_to_openai(data: dict) -> dict:
         system_text = system_text[:1500]
         messages = [{"role": "system", "content": system_text}] + messages
 
-    # Cap max_tokens: Phi-3.5-mini produces nonsense beyond ~2048 tokens
     max_tokens = min(int(data.get("max_tokens", 1024)), 2048)
 
     return {
         "model":       data.get("model", MODEL_NAME),
         "messages":    messages,
         "max_tokens":  max_tokens,
-        "temperature": data.get("temperature", 0.1),  # low temp = coherent code output
+        "temperature": data.get("temperature", 0.1),
         "stream":      data.get("stream", False),
     }
 
@@ -175,7 +173,6 @@ def anthropic_messages():
             return jsonify({"error": {"message": f"OVMS error {resp.status_code}: {resp.text[:500]}", "type": "upstream_error"}}), 502
 
         if stream:
-            # Translate OpenAI SSE chunks → Anthropic SSE events
             def generate():
                 yield 'event: message_start\n'
                 yield 'data: ' + json.dumps({

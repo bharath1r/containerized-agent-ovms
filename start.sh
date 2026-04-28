@@ -113,7 +113,7 @@ RENDER_GID=$(stat -c '%g' /dev/dri/renderD128 2>/dev/null || echo "")
 
 # NPU requires OVMS image with NPU GenAI support
 if [[ "$TARGET_DEVICE" == "NPU" ]]; then
-    OVMS_IMAGE="openvino/model_server:latest-gpu"  # same image, NPU driver injected via device
+    OVMS_IMAGE="openvino/model_server:latest-gpu"
 fi
 
 echo ""

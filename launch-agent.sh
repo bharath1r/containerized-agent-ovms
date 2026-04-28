@@ -28,7 +28,6 @@ ANTHROPIC_BASE="http://localhost:${PROXY_PORT}"   # /v1/messages  (Claude Code)
 OPENAI_BASE="http://localhost:${PROXY_PORT}/v1"   # /v1/chat/completions (Aider, etc.)
 OVMS_DIRECT="http://localhost:${OVMS_PORT}/v3"    # direct to OVMS (no proxy)
 
-# Defaults
 AGENT="claude"
 EXTRA_ARGS=""
 CUSTOM_CMD=""
@@ -71,10 +70,8 @@ launch_claude() {
     export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE}"
     export ANTHROPIC_API_KEY="local-ovms"
     export CLAUDE_CODE_MAX_OUTPUT_TOKENS="32000"
-    # Map all model tiers to the local model
     export ANTHROPIC_MODEL="${OVMS_MODEL}"
     export ANTHROPIC_SMALL_FAST_MODEL="${OVMS_MODEL}"
-    # Ensure npm-global bin is in PATH (set by setup.sh, may not be in current session)
     export PATH="${HOME}/.npm-global/bin:${PATH}"
     exec claude ${EXTRA_ARGS}
 }
